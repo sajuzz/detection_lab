@@ -1,0 +1,71 @@
+title: Detect Suspicious PowerShell Execution
+id: 12345678-1234-1234-1234-123456789012
+status: test
+description: Detects PowerShell execution with suspicious parameters commonly used in attacks
+author: Security Team
+date: 2024-10-11
+references:
+    - https://attack.mitre.org/techniques/T1059/001/
+
+logsource:
+    product: windows
+    service: sysmon
+    category: process_creation
+
+detection:
+    selection_process:
+        Image|endswith:
+            - "\powershell.exe"
+            - "\pwsh.exe"
+    
+    selection_encoded:
+        CommandLine|contains:
+            - "-EncodedCommand"
+            - "-enc "
+            - "-e "
+    
+    selection_hidden:
+        CommandLine|contains:
+            - "-WindowStyle Hidden"
+            - "-w Hidden"
+            - "-WindowStyle h"
+    
+    selection_noprofile:
+        CommandLine|contains:
+            - "-NoProfile"
+            - "-nop"
+    
+    selection_download_exec:
+        CommandLine|contains|all:
+            - "IEX"
+            - "http"
+    
+    selection_remotescript:
+        CommandLine|contains:
+            - "Invoke-WebRequest"
+            - "DownloadString"
+            - "New-Object Net.WebClient"
+    
+    filter_system:
+        User:
+            - "SYSTEM"
+            - "LOCAL SERVICE"
+            - "NETWORK SERVICE"
+    
+    filter_admin_scripts:
+        ParentImage|contains:
+            - "C:\\Program Files"
+            - "C:\\Program Files (x86)"
+    
+    condition: selection_process and (selection_encoded or selection_hidden or (selection_noprofile and selection_download_exec) or selection_remotescript) and not (filter_system or filter_admin_scripts)
+
+falsepositives:
+    - Legitimate administrators running PowerShell scripts
+    - System maintenance tasks
+    - Configuration management tools (Ansible, Puppet)
+
+level: high
+tags:
+    - attack.execution
+    - attack.t1059.001
+    - attack.defense_evasion
